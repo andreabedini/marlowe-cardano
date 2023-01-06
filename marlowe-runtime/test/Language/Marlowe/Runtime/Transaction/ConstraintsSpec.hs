@@ -189,7 +189,7 @@ spec = do
         Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
 
   describe "selectCoins" do
-    prop "sufficient collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
+    focus $ prop "sufficient collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
       -- This test is broadly doing this:
       -- - Start with an empty tx body
       -- - and an empty (as possible) Marlowe context
@@ -423,6 +423,30 @@ spec = do
             -- check 2: non-ADA inputs and non-ADA outputs cancel each other out
             tokIns <> negateValue tokOuts `shouldBe` mempty
         Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
+
+  focus $ describe "balanceTx" do
+    prop "tx should balance if coin selection succeeded and no Plutus failure occurred" \(SomeTxConstraints marloweVersion constraints) -> do
+      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+
+      -- We MUST dictate the distribution of wallet context assets, default
+      -- generation only tests with empty wallets!
+      maxLovelace <- choose (0, 40_000_000)
+      walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
+
+      let
+        -- Function to convert the Left side of the Either from (ConstraintError v) to String
+        balanceResult :: Either String ()
+        balanceResult = either
+          (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
+          (\_txBC -> pure ())  -- FIXME This is where we perform balanceTx
+          $ selectCoins protocolTestnet marloweVersion marloweContext
+              walletContext emptyTxBodyContent
+
+      -- FIXME I think we don't want to bother with these walletCtxSufficient == False cases in this test
+      pure $ case balanceResult of
+        Right _ -> label "balancing succeeded" True
+        Left failedMsg ->
+          counterexample ("balancing shouldn't have failed\n" <> failedMsg) False
 
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
