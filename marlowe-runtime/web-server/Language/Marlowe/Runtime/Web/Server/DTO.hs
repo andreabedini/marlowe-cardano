@@ -304,7 +304,7 @@ instance ToDTO TxRecord where
       , inputState = case version of
           MarloweV1 -> Sem.marloweState $ datum input
       , inputs = case version of
-          MarloweV1 -> redeemer
+          MarloweV1 -> inputs
       , outputUtxo = toDTO $ utxo <$> scriptOutput
       , outputContract = case version of
           MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput
